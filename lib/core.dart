@@ -1,169 +1,218 @@
+//import 'package:flutter/material.dart';
+//import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+enum DataType {
+  integer,
+}
+
+class Output {
+  Output({
+    required this.name,
+    required this.dataType,
+  });
+
+  /// The string by which this output will be referenced.
+  /// This should be unique per node type.
+  final String name;
+
+  /// The data type of this output.
+  final DataType dataType;
+}
+
 /// Base class for all properties.
+///
+/// A Property is the representation of a single point of
+/// data that can changed either be evaluation of an input
+/// or by the change of the value directly by the user.
 class Property {
   Property({
-    required this.id,
+    required this.name,
     required this.dataType,
     required this.value,
   });
 
-  final String id;
-  final Type dataType;
-  dynamic value;
+  /// The string by which this property will be referenced.
+  /// This should be unique per node type.
+  final String name;
 
-  void setValue(dynamic newValue) {
+  /// The data type of this property.
+  final DataType dataType;
+
+  /// The current value of the property, which is
+  /// used if ``connection`` is null.
+  Object value;
+
+  /// The connected node to evaluate the value from.
+  /// If this is null, then value is used during evaluation.
+  /// (NodeBase object, name of the connected node's Output)
+  (NodeBase, String)? connection;
+
+  void setValue(Object newValue) {
+    if (dataType == DataType.integer) {
+      assert(newValue is int);
+    }
     value = newValue;
+  }
+
+  void setConnection((NodeBase, String) newConnection) {
+    connection = newConnection;
   }
 }
 
 /// Integer input.
 class IntegerProperty extends Property {
   IntegerProperty({
-    required super.id,
+    required super.name,
     required super.dataType,
     required super.value,
   }) : assert(value is int);
 }
 
-/// Base class for all parameters.
-class Parameter {
-  Parameter({
-    required this.id,
-    required this.dataType,
-    required this.value,
-  });
-
-  final String id;
-  final dynamic dataType;
-  dynamic value;
-  NodeBase? connection;
-
-  void setValue(dynamic newValue) {
-    value = newValue;
-  }
-
-  void setConnection(NodeBase newConnection) {
-    connection = newConnection;
-  }
-}
-
-/// Integer output.
-class IntegerParameter extends Parameter {
-  IntegerParameter({
-    required super.id,
-    required super.dataType,
-    required super.value,
-  });
-}
-
 /// The base class for all nodes.
 class NodeBase {
   NodeBase({
-    required this.id,
+    required this.name,
   }) {
+    defineMeta();
     defineProperties();
-    defineParameters();
+    defineOutputs();
   }
 
-  final String id;
+  /// The string by which the node type will be referenced.
+  /// This should be unique among all nodes.
+  final String name;
+
+  String label = '...';
+  //PhosphorIconData icon = PhosphorIcons.notepad(PhosphorIconsStyle.light);
+  //Offset position = const Offset(0, 0);
+  bool selected = false;
 
   Map<String, Property> properties = {};
-  Map<String, Parameter> parameters = {};
+  Map<String, Output> outputs = {};
 
   bool isOutput() {
     return false;
   }
 
   /// Use for the output node only.
-  NodeBase? get connectedNode {
+  (NodeBase, String)? get connectedNode {
     return null;
   }
+
+  void defineMeta() {}
 
   void defineProperties() {
     properties = {};
   }
 
-  void defineParameters() {
-    parameters = {};
+  void defineOutputs() {
+    outputs = {};
   }
 
-  void setPropertyValue(String name, dynamic newValue) {
+  void setPropertyValue(String name, Object newValue) {
     Property? property = properties[name];
     assert(property != null);
     property?.setValue(newValue);
   }
 
-  void setParameterConnection(String name, NodeBase connectedNode) {
-    Parameter? parameter = parameters[name];
-    assert(parameter != null);
-    parameter?.setConnection(connectedNode);
+  void setConnection(String name, NodeBase connectedNode, String connectedNodeOutputName) {
+    Property? property = properties[name];
+    assert(property != null);
+    property?.setConnection((connectedNode, connectedNodeOutputName));
   }
 
   dynamic evaluateProperty(EvalInfo eval, String id) {
     return eval.evaluateProperty(id);
   }
 
-  dynamic evaluateParameter(EvalInfo eval, String id) {
-    return eval.evaluateParameter(id);
-  }
-
-  dynamic evaluateNode(EvalInfo eval) {
-    return null;
+  Map<String, dynamic> evaluateNode(EvalInfo eval) {
+    return {};
   }
 }
 
 class IntegerNode extends NodeBase {
-  IntegerNode({super.id = 'int'});
+  IntegerNode({super.name = 'integer'});
 
-  //final String name;
+  @override
+  void defineMeta() {
+    label = 'Integer';
+    //icon = PhosphorIcons.numberCircleOne(PhosphorIconsStyle.light);
+  }
 
   @override
   void defineProperties() {
     properties = {
-      'number': IntegerProperty(id: 'number', dataType: int, value: 21),
+      'number': IntegerProperty(name: 'number', dataType: DataType.integer, value: 21),
     };
   }
 
   @override
-  int evaluateNode(EvalInfo eval) {
+  void defineOutputs() {
+    outputs = {
+      'output': Output(
+        name: 'output',
+        dataType: DataType.integer,
+      ),
+    };
+  }
+
+  @override
+  Map<String, int> evaluateNode(EvalInfo eval) {
     int number = eval.evaluateProperty('number');
-    return number;
+    return {
+      'output': number,
+    };
   }
 }
 
 class AddNode extends NodeBase {
-  AddNode({super.id = 'add'});
-
-  //final String name;
+  AddNode({super.name = 'add'});
 
   @override
-  void defineParameters() {
-    parameters = {
-      'a': IntegerParameter(
-        id: 'a',
-        dataType: int,
+  void defineMeta() {
+    label = 'Add';
+    //icon = PhosphorIcons.plusCircle(PhosphorIconsStyle.light);
+  }
+
+  @override
+  void defineProperties() {
+    properties = {
+      'a': IntegerProperty(
+        name: 'a',
+        dataType: DataType.integer,
         value: 0,
       ),
-      'b': IntegerParameter(
-        id: 'b',
-        dataType: int,
+      'b': IntegerProperty(
+        name: 'b',
+        dataType: DataType.integer,
         value: 0,
       ),
     };
   }
 
   @override
-  int evaluateNode(EvalInfo eval) {
-    int inputA = evaluateParameter(eval, 'a');
-    int inputB = evaluateParameter(eval, 'b');
+  void defineOutputs() {
+    outputs = {
+      'output': Output(
+        name: 'output',
+        dataType: DataType.integer,
+      ),
+    };
+  }
 
-    return inputA + inputB;
+  @override
+  Map<String, int> evaluateNode(EvalInfo eval) {
+    int inputA = evaluateProperty(eval, 'a');
+    int inputB = evaluateProperty(eval, 'b');
+
+    return {
+      'output': inputA + inputB,
+    };
   }
 }
 
 class OutputNode extends NodeBase {
-  OutputNode({super.id = 'output'});
-
-  //final String name;
+  OutputNode({super.name = 'output'});
 
   @override
   bool isOutput() {
@@ -171,16 +220,22 @@ class OutputNode extends NodeBase {
   }
 
   @override
-  NodeBase? get connectedNode {
-    return parameters['final']?.connection;
+  (NodeBase, String)? get connectedNode {
+    return properties['final']?.connection;
   }
 
   @override
-  void defineParameters() {
-    parameters = {
-      'final': IntegerParameter(
-        id: 'final',
-        dataType: int,
+  void defineMeta() {
+    label = 'Output';
+    //icon = PhosphorIcons.layout(PhosphorIconsStyle.light);
+  }
+
+  @override
+  void defineProperties() {
+    properties = {
+      'final': IntegerProperty(
+        name: 'final',
+        dataType: DataType.integer,
         value: 10,
       ),
     };
@@ -188,9 +243,7 @@ class OutputNode extends NodeBase {
 }
 
 class OutputNode2 extends NodeBase {
-  OutputNode2({super.id = 'output2'});
-
-  //final String name;
+  OutputNode2({super.name = 'output2'});
 
   @override
   bool isOutput() {
@@ -198,16 +251,16 @@ class OutputNode2 extends NodeBase {
   }
 
   @override
-  NodeBase? get connectedNode {
-    return parameters['final']?.connection;
+  (NodeBase, String)? get connectedNode {
+    return properties['final']?.connection;
   }
 
   @override
-  void defineParameters() {
-    parameters = {
-      'final': IntegerParameter(
-        id: 'final',
-        dataType: int,
+  void defineProperties() {
+    properties = {
+      'final': IntegerProperty(
+        name: 'final',
+        dataType: DataType.integer,
         value: 10,
       ),
     };
@@ -220,19 +273,13 @@ class EvalInfo {
   final NodeBase node;
 
   /// Evaluate the value of the parameter [name] of [node].
-  dynamic evaluateParameter(String name) {
-    Parameter param = node.parameters[name]!;
-    if (param.connection != null) {
-      // Evaluate the next node
-      EvalInfo info = EvalInfo(node: param.connection!);
-      return param.connection?.evaluateNode(info);
-    }
-    return param.value;
-  }
-
-  /// Evaluate the value of the property [name] of [node].
   dynamic evaluateProperty(String name) {
     Property prop = node.properties[name]!;
+    if (prop.connection != null) {
+      // Evaluate the next node
+      EvalInfo info = EvalInfo(node: prop.connection!.$1);
+      return prop.connection?.$1.evaluateNode(info)[prop.connection!.$2];
+    }
     return prop.value;
   }
 }
@@ -246,16 +293,20 @@ class Renderer {
 
   int render(String outputNodeId) {
     NodeBase outputNode = getOutputNode(outputNodeId);
-    print('${outputNode.id} connection -> ${outputNode.parameters['final']?.connection}');
+    print('${outputNode.name} connection -> ${outputNode.properties['final']?.connection}');
 
-    NodeBase? nodeConnectedToOutput = outputNode.connectedNode;
-    if (nodeConnectedToOutput == null) {
+    // The node that is connected to this output node.
+    NodeBase? nodeConnectedToOutput = outputNode.connectedNode?.$1;
+    // The name of the output of the node connected to this output node.
+    String? connectedOutputName = outputNode.connectedNode?.$2;
+
+    if (nodeConnectedToOutput == null || connectedOutputName == null) {
       // No node is connected to the output node.
       return -1;
     }
 
     EvalInfo evalInfo = EvalInfo(node: nodeConnectedToOutput);
-    int result = evalInfo.node.evaluateNode(evalInfo);
+    int result = evalInfo.node.evaluateNode(evalInfo)[connectedOutputName];
 
     return result;
   }
@@ -285,16 +336,17 @@ void main() {
   Renderer renderer2 = Renderer(nodes: nodes);
 
   // First output node
-  nodes['add']?.setParameterConnection('a', nodes['integer']!);
-  nodes['add']?.setParameterConnection('b', nodes['integer2']!);
+  nodes['integer']!.setPropertyValue('number', 6);
+  nodes['add']?.setConnection('a', nodes['integer']!, 'output');
+  nodes['add']?.setConnection('b', nodes['integer2']!, 'output');
 
-  nodes['output']?.setParameterConnection('final', nodes['add']!);
+  nodes['output']?.setConnection('final', nodes['add']!, 'output');
 
   int result = renderer.render('output');
   print(result.toString());
 
   // Second output node
-  nodes['output2']?.setParameterConnection('final', nodes['integer']!);
+  nodes['output2']?.setConnection('final', nodes['integer']!, 'output');
 
   int result2 = renderer2.render('output2');
   print(result2.toString());
